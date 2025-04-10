@@ -39,18 +39,18 @@ add_action( 'plugins_loaded', 'gsec_load_textdomain' );
  * Registers the shortcode [google_sheet_event_calendar].
  */
 function gsec_register_shortcode() {
-    add_shortcode( 'google_sheet_event_calendar', 'gsec_render_shortcode_hu' );
+    add_shortcode( 'google_sheet_event_calendar', 'gsec_render_shortcode' );
 }
 add_action( 'init', 'gsec_register_shortcode' );
 
 /**
- * Renders the event calendar shortcode output (Hungarian Layout).
+ * Renders the event calendar shortcode output.
  * Handles 'count', 'csv_url', and 'cache_hours' parameters.
  *
  * @param array $atts Shortcode attributes.
  * @return string HTML output for the event list.
  */
-function gsec_render_shortcode_hu( $atts ) {
+function gsec_render_shortcode( $atts ) {
     // Define default attributes and merge with user attributes
     $atts = shortcode_atts(
         array(
@@ -73,7 +73,7 @@ function gsec_render_shortcode_hu( $atts ) {
     }
 
     // --- Caching Logic ---
-    $cache_key      = 'gsec_event_data_hu_' . md5( $csv_url );
+    $cache_key      = 'gsec_event_data_' . md5( $csv_url );
     $fetched_events = false;
     $use_cache      = ( $cache_hours > 0 );
 
@@ -81,11 +81,10 @@ function gsec_render_shortcode_hu( $atts ) {
         $cached_events = get_transient( $cache_key );
     } else {
         $cached_events = false;
-        // delete_transient( $cache_key ); // Optional: Force clear if switching to no-cache
     }
 
     if ( false === $cached_events ) {
-        $fetched_events = gsec_fetch_and_parse_csv_hu( $csv_url );
+        $fetched_events = gsec_fetch_and_parse_csv( $csv_url );
 
         if ( is_wp_error( $fetched_events ) ) {
             return '<p style="color: red;">' . sprintf(
@@ -112,7 +111,7 @@ function gsec_render_shortcode_hu( $atts ) {
     }
 
     // Filter for upcoming events and sort them (includes multi-day logic)
-    $upcoming_events = gsec_filter_and_sort_events_hu( $fetched_events );
+    $upcoming_events = gsec_filter_and_sort_events( $fetched_events );
 
     // Limit the number of events
     $display_events = array_slice( $upcoming_events, 0, $event_count );
@@ -123,10 +122,10 @@ function gsec_render_shortcode_hu( $atts ) {
     }
 
     // Enqueue styles for the calendar
-    gsec_enqueue_styles_hu();
+    gsec_enqueue_styles();
 
     // Generate HTML (includes location and multi-day layout)
-    return gsec_generate_html_hu( $display_events );
+    return gsec_generate_html( $display_events );
 }
 
 
@@ -136,7 +135,7 @@ function gsec_render_shortcode_hu( $atts ) {
  * @param string $csv_url The URL of the Google Sheet CSV.
  * @return array|WP_Error Array of event data on success, WP_Error on failure.
  */
-function gsec_fetch_and_parse_csv_hu( $csv_url ) {
+function gsec_fetch_and_parse_csv( $csv_url ) {
     $response = wp_remote_get( $csv_url, array( 'timeout' => 15 ) );
 
     if ( is_wp_error( $response ) ) {
@@ -209,9 +208,9 @@ function gsec_fetch_and_parse_csv_hu( $csv_url ) {
  * @param array $events Array of parsed event data.
  * @return array Sorted array of upcoming events.
  */
-function gsec_filter_and_sort_events_hu( $events ) {
+function gsec_filter_and_sort_events( $events ) {
     if ( ! is_array( $events ) ) {
-        error_log("GSEC Plugin: Invalid data passed to gsec_filter_and_sort_events_hu. Expected array, got: " . gettype($events));
+        error_log("GSEC Plugin: Invalid data passed to gsec_filter_and_sort_events. Expected array, got: " . gettype($events));
         return [];
     }
 
@@ -352,13 +351,13 @@ function gsec_filter_and_sort_events_hu( $events ) {
 
 
 /**
- * Generates the HTML output for the event list (Hungarian Layout).
+ * Generates the HTML output for the event list.
  * Adds location and handles multi-day display.
  *
  * @param array $events Array of sorted, filtered events to display.
  * @return string HTML output.
  */
-function gsec_generate_html_hu( $events ) {
+function gsec_generate_html( $events ) {
     ob_start();
 
     $original_locale = setlocale(LC_TIME, 0);
@@ -371,7 +370,7 @@ function gsec_generate_html_hu( $events ) {
         $hu_month_abbr = null;
     }
 
-    echo '<div class="gsec-event-list-hu">';
+    echo '<div class="gsec-event-list">';
 
     foreach ( $events as $event ) {
         if (!is_array($event) || !isset($event['title_hu']) || !isset($event['start_timestamp'])) {
@@ -423,7 +422,7 @@ function gsec_generate_html_hu( $events ) {
 
 
         // Add multi-day class if needed
-        $event_classes = 'gsec-event-hu';
+        $event_classes = 'gsec-event';
         if ($is_multi_day) {
             $event_classes .= ' gsec-event-multi-day';
         }
@@ -462,7 +461,7 @@ function gsec_generate_html_hu( $events ) {
         <?php
     } // End foreach
 
-    echo '</div>'; // End gsec-event-list-hu
+    echo '</div>'; // End gsec-event-list
 
     setlocale(LC_TIME, $original_locale);
 
@@ -471,29 +470,29 @@ function gsec_generate_html_hu( $events ) {
 
 
 /**
- * Enqueues inline styles for the Hungarian layout.
+ * Enqueues inline styles for the event calendar layout.
  * Includes styles for location and multi-day events.
  */
-function gsec_enqueue_styles_hu() {
-    $style_handle = 'gsec-styles-hu-handle';
+function gsec_enqueue_styles() {
+    $style_handle = 'gsec-styles-handle';
     wp_register_style( $style_handle, false );
     wp_enqueue_style( $style_handle );
 
     $custom_css = "
-        .gsec-event-list-hu {
+        .gsec-event-list {
             margin-bottom: 20px;
             padding: 0;
             list-style: none;
             max-width: 600px; /* Optional: constrain width */
         }
-        .gsec-event-hu {
+        .gsec-event {
             display: flex;
             align-items: flex-start; /* Align items to the top */
             margin-bottom: 25px;
             padding-bottom: 15px;
             border-bottom: 1px solid #eee; /* Separator line */
         }
-        .gsec-event-hu:last-child {
+        .gsec-event:last-child {
             border-bottom: none;
             margin-bottom: 0;
             padding-bottom: 0;
@@ -506,14 +505,14 @@ function gsec_enqueue_styles_hu() {
             padding-top: 2px; /* Align top of date with top of text */
         }
         /* Single Day Date Style */
-        .gsec-event-hu:not(.gsec-event-multi-day) .gsec-month {
+        .gsec-event:not(.gsec-event-multi-day) .gsec-month {
             display: block;
             font-size: 0.9em;
             line-height: 1.2;
             text-transform: lowercase;
             font-weight: normal;
         }
-        .gsec-event-hu:not(.gsec-event-multi-day) .gsec-day {
+        .gsec-event:not(.gsec-event-multi-day) .gsec-day {
             display: block;
             font-size: 1.4em; /* Larger day number */
             font-weight: bold;
@@ -578,6 +577,6 @@ function gsec_enqueue_styles_hu() {
 }
 
 // === Action Hooks ===
-add_action( 'wp_enqueue_scripts', 'gsec_enqueue_styles_hu' );
+add_action( 'wp_enqueue_scripts', 'gsec_enqueue_styles' );
 
 ?>
