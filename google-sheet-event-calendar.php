@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Google Sheet Event Calendar
  * Plugin URI:        https://github.com/hasomerhacairhu/event-calendar-wordpress-plugin
- * Description:       Displays upcoming events from a Google Sheet CSV using a shortcode. Mimics The Events Calendar list style. Adjusted for Hungarian layout.
- * Version:           1.1.1
+ * Description:       Displays upcoming events from a Google Sheet CSV using a shortcode. Mimics The Events Calendar list style. Adjusted for Hungarian layout. Allows cache duration control.
+ * Version:           1.2.0
  * Author:            Bedő Marci
  * Author URI:        https://somer.hu/
  * License:           GPLv2 or later
@@ -30,7 +30,6 @@ define('GSEC_COL_MANAGER', 7);         // H Felelős (Manager) (Kept for data st
  * Load plugin textdomain for internationalization.
  */
 function gsec_load_textdomain() {
-    // Use the text domain specified in the header
     load_plugin_textdomain( 'google-sheet-event-calendar', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 }
 add_action( 'plugins_loaded', 'gsec_load_textdomain' );
@@ -40,14 +39,13 @@ add_action( 'plugins_loaded', 'gsec_load_textdomain' );
  * Registers the shortcode [google_sheet_event_calendar].
  */
 function gsec_register_shortcode() {
-    // Use the original shortcode name, but point to the function that renders the HU layout
     add_shortcode( 'google_sheet_event_calendar', 'gsec_render_shortcode_hu' );
 }
 add_action( 'init', 'gsec_register_shortcode' );
 
 /**
  * Renders the event calendar shortcode output (Hungarian Layout).
- * This function is now triggered by [google_sheet_event_calendar].
+ * Handles 'count', 'csv_url', and 'cache_hours' parameters.
  *
  * @param array $atts Shortcode attributes.
  * @return string HTML output for the event list.
@@ -56,52 +54,72 @@ function gsec_render_shortcode_hu( $atts ) {
     // Define default attributes and merge with user attributes
     $atts = shortcode_atts(
         array(
-            'count'   => 5,            // Default number of events to show
-            'csv_url' => '',           // Default empty CSV URL
+            'count'       => 5,    // Default number of events to show
+            'csv_url'     => '',   // Default empty CSV URL
+            'cache_hours' => 6,    // Default cache duration in hours
         ),
         $atts,
-        'google_sheet_event_calendar' // Use the original shortcode name here for attribute parsing
+        'google_sheet_event_calendar' // The shortcode name
     );
 
     // Sanitize attributes
     $event_count = max(1, intval( $atts['count'] ));
     $csv_url     = esc_url_raw( trim( $atts['csv_url'] ) );
+    // Allow float values for hours (e.g., 0.5 for 30 mins), ensure non-negative
+    $cache_hours = max(0, floatval( $atts['cache_hours'] ));
 
     // Validate CSV URL
     if ( empty( $csv_url ) || ! filter_var( $csv_url, FILTER_VALIDATE_URL ) ) {
-        // Use the text domain from the header
         return '<p style="color: red;">' . esc_html__( 'Hiba: Kérjük, adjon meg egy érvényes Google Táblázat CSV URL-t a shortcode-ban.', 'google-sheet-event-calendar' ) . '</p>';
     }
 
     // --- Caching Logic ---
-    // Using a distinct cache key including 'hu' to separate from potential older caches
-    $cache_key      = 'gsec_event_data_hu_' . md5( $csv_url );
-    $cached_events  = get_transient( $cache_key );
+    $cache_key      = 'gsec_event_data_hu_' . md5( $csv_url ); // Cache key based on URL only
     $fetched_events = false;
+    $use_cache      = ( $cache_hours > 0 ); // Determine if caching should be used
 
+    if ( $use_cache ) {
+        $cached_events = get_transient( $cache_key );
+    } else {
+        $cached_events = false; // Ensure we don't use cache if cache_hours is 0 or less
+        // Optionally, delete existing transient if switching to no-cache mode
+        // delete_transient( $cache_key );
+    }
+
+    // Fetch if cache is not used, or if cache is expired/missing
     if ( false === $cached_events ) {
-        // Cache is expired or doesn't exist, fetch fresh data
         $fetched_events = gsec_fetch_and_parse_csv_hu( $csv_url );
 
         if ( is_wp_error( $fetched_events ) ) {
             return '<p style="color: red;">' . sprintf(
-                // Use the text domain from the header
                 esc_html__( 'Hiba a CSV lekérésekor vagy feldolgozásakor (%s):', 'google-sheet-event-calendar' ),
                 esc_html( $fetched_events->get_error_code() )
             ) . ' ' . esc_html( $fetched_events->get_error_message() ) . '</p>';
         }
 
-        set_transient( $cache_key, $fetched_events, 6 * HOUR_IN_SECONDS );
-
+        // Store in cache ONLY if caching is enabled ($use_cache is true)
+        if ( $use_cache && ! is_wp_error( $fetched_events ) ) {
+            // Calculate expiration in seconds, ensuring it's an integer
+            $expiration = intval( $cache_hours * HOUR_IN_SECONDS );
+            set_transient( $cache_key, $fetched_events, $expiration );
+        }
     } else {
         // Use data from cache
         $fetched_events = $cached_events;
     }
 
     // --- Data Processing ---
-    if ( empty( $fetched_events ) ) {
-         // Use the text domain from the header
-         return '<p>' . esc_html__( 'Nem található eseményadat a táblázatban vagy a gyorsítótárban.', 'google-sheet-event-calendar' ) . '</p>';
+    if ( empty( $fetched_events ) || is_wp_error( $fetched_events ) ) {
+         // Check if it was an error or just no data
+         if ( ! is_wp_error( $fetched_events ) ) {
+             return '<p>' . esc_html__( 'Nem található eseményadat a táblázatban vagy a gyorsítótárban.', 'google-sheet-event-calendar' ) . '</p>';
+         }
+         // If it's still an error here, something went wrong despite caching logic (should have been caught earlier)
+         // This might occur if the cached value itself was somehow corrupted or an error object.
+         // For safety, return a generic error.
+         error_log("GSEC Plugin: Unexpected WP_Error object after cache check for URL: " . $csv_url);
+         return '<p style="color: red;">' . esc_html__( 'Hiba történt az eseményadatok feldolgozása közben.', 'google-sheet-event-calendar' ) . '</p>';
+
     }
 
     // Filter for upcoming events and sort them
@@ -112,7 +130,6 @@ function gsec_render_shortcode_hu( $atts ) {
 
     // --- Rendering ---
     if ( empty( $display_events ) ) {
-        // Use the text domain from the header
         return '<p>' . esc_html__( 'Nincsenek közelgő események.', 'google-sheet-event-calendar' ) . '</p>';
     }
 
@@ -122,9 +139,10 @@ function gsec_render_shortcode_hu( $atts ) {
     return gsec_generate_html_hu( $display_events );
 }
 
+
 /**
  * Fetches and parses the CSV data from the given URL.
- *
+ * (No changes needed here from version 1.1.1)
  * @param string $csv_url The URL of the Google Sheet CSV.
  * @return array|WP_Error Array of event data on success, WP_Error on failure.
  */
@@ -132,20 +150,17 @@ function gsec_fetch_and_parse_csv_hu( $csv_url ) {
     $response = wp_remote_get( $csv_url, array( 'timeout' => 15 ) );
 
     if ( is_wp_error( $response ) ) {
-        // Use the text domain from the header
         return new WP_Error( 'fetch_error', __( 'Nem sikerült lekérni az adatokat az URL-ről.', 'google-sheet-event-calendar' ), $response->get_error_message() );
     }
 
     $http_code = wp_remote_retrieve_response_code( $response );
     if ( $http_code !== 200 ) {
-        // Use the text domain from the header
         return new WP_Error( 'fetch_error_code', sprintf( __( 'A %d HTTP státuszkód érkezett az URL lekérésekor.', 'google-sheet-event-calendar' ), $http_code ) );
     }
 
     $csv_data = wp_remote_retrieve_body( $response );
 
     if ( empty( $csv_data ) ) {
-         // Use the text domain from the header
          return new WP_Error( 'empty_csv', __( 'A letöltött CSV fájl üres.', 'google-sheet-event-calendar' ) );
     }
 
@@ -155,7 +170,6 @@ function gsec_fetch_and_parse_csv_hu( $csv_url ) {
     $events = array();
 
     if (count($lines) < 2) {
-        // Use the text domain from the header
         return new WP_Error( 'no_data_rows', __( 'A CSV nem tartalmaz adatsorokat (csak fejlécet vagy üres).', 'google-sheet-event-calendar' ) );
     }
 
@@ -168,15 +182,10 @@ function gsec_fetch_and_parse_csv_hu( $csv_url ) {
             continue;
         }
 
-        // Increased robustness for column count check
         $expected_columns = max( GSEC_COL_START_DATE, GSEC_COL_START_TIME, GSEC_COL_END_DATE, GSEC_COL_END_TIME, GSEC_COL_TITLE_HU, GSEC_COL_TITLE_EN, GSEC_COL_LOCATION, GSEC_COL_MANAGER ) + 1;
         if ( count( $row ) < $expected_columns ) {
-             // Pad the row with empty strings if columns are missing, to avoid undefined index errors
              $row = array_pad($row, $expected_columns, '');
              error_log("GSEC Plugin: Row $index has fewer than $expected_columns columns. Padded row.");
-             // Alternatively, skip the row:
-             // error_log("GSEC Plugin: Row $index has fewer than $expected_columns columns. Skipping row.");
-             // continue;
         }
 
         $events[] = [
@@ -192,7 +201,6 @@ function gsec_fetch_and_parse_csv_hu( $csv_url ) {
     }
 
     if ( empty( $events ) ) {
-         // Use the text domain from the header
          return new WP_Error( 'no_valid_rows', __( 'Nem található érvényes adatsor a CSV feldolgozása után.', 'google-sheet-event-calendar' ) );
     }
 
@@ -203,16 +211,29 @@ function gsec_fetch_and_parse_csv_hu( $csv_url ) {
 /**
  * Filters events to include only upcoming ones and sorts them chronologically.
  * Handles specific Hungarian date format 'Y.m.d.'.
+ * (No changes needed here from version 1.1.1)
  *
  * @param array $events Array of parsed event data.
  * @return array Sorted array of upcoming events.
  */
 function gsec_filter_and_sort_events_hu( $events ) {
+    // Ensure $events is an array before proceeding
+     if ( ! is_array( $events ) ) {
+         error_log("GSEC Plugin: Invalid data passed to gsec_filter_and_sort_events_hu. Expected array, got: " . gettype($events));
+         return []; // Return empty array if input is invalid
+     }
+
     $upcoming = [];
     $now = new DateTime('now', new DateTimeZone(wp_timezone_string()));
     $now_timestamp = $now->getTimestamp();
 
     foreach ( $events as $event ) {
+         // Basic check if $event is an array and has the required keys
+         if ( ! is_array($event) || ! isset($event['start_date']) || ! isset($event['start_time']) || ! isset($event['title_hu']) ) {
+             error_log("GSEC Plugin: Skipping invalid event data structure during filtering: " . print_r($event, true));
+             continue;
+         }
+
         $start_timestamp = false;
         $start_date_str_raw = $event['start_date'];
         $start_time_str = $event['start_time'];
@@ -259,14 +280,18 @@ function gsec_filter_and_sort_events_hu( $events ) {
 
         if ( $start_timestamp !== false && $start_timestamp >= $now_timestamp ) {
             $event['start_timestamp'] = $start_timestamp;
-            $event['end_time_display'] = !empty($event['end_time']) ? trim($event['end_time']) : '';
+             // Ensure end_time exists before accessing it
+            $event['end_time_display'] = (isset($event['end_time']) && !empty($event['end_time'])) ? trim($event['end_time']) : '';
             $upcoming[] = $event;
         }
     }
 
     // Sort events by start timestamp (ascending)
     usort( $upcoming, function( $a, $b ) {
-        return $a['start_timestamp'] <=> $b['start_timestamp'];
+        // Add checks for timestamp existence before comparing
+         $ts_a = isset($a['start_timestamp']) ? $a['start_timestamp'] : 0;
+         $ts_b = isset($b['start_timestamp']) ? $b['start_timestamp'] : 0;
+         return $ts_a <=> $ts_b;
     } );
 
     return $upcoming;
@@ -275,6 +300,7 @@ function gsec_filter_and_sort_events_hu( $events ) {
 
 /**
  * Generates the HTML output for the event list (Hungarian Layout).
+ * (No changes needed here from version 1.1.1)
  *
  * @param array $events Array of sorted, filtered events to display.
  * @return string HTML output.
@@ -295,6 +321,11 @@ function gsec_generate_html_hu( $events ) {
     echo '<div class="gsec-event-list-hu">';
 
     foreach ( $events as $event ) {
+        // Ensure event is an array and keys exist before accessing
+        if (!is_array($event) || !isset($event['title_hu']) || !isset($event['start_timestamp'])) {
+            continue; // Skip malformed event data
+        }
+
         $title = $event['title_hu'];
         $month_abbr = '';
 
@@ -308,11 +339,13 @@ function gsec_generate_html_hu( $events ) {
 
         $day = date_i18n( 'j', $event['start_timestamp'] );
 
-        $time_range = trim($event['start_time']);
-        if ( ! empty( $event['end_time_display'] ) ) {
-            if(trim($event['end_time_display']) != $time_range){
-                 $time_range .= ' - ' . esc_html( $event['end_time_display'] );
-            }
+        $time_range = isset($event['start_time']) ? trim($event['start_time']) : ''; // Check start_time exists
+        $end_time_display = isset($event['end_time_display']) ? trim($event['end_time_display']) : ''; // Check end_time_display exists
+
+        if ( ! empty( $end_time_display ) ) {
+             if($end_time_display != $time_range){ // Avoid '10:00 - 10:00' if start/end are same
+                 $time_range .= ' - ' . esc_html( $end_time_display );
+             }
         }
 
         ?>
@@ -341,6 +374,7 @@ function gsec_generate_html_hu( $events ) {
 
 /**
  * Enqueues inline styles for the Hungarian layout.
+ * (No changes needed here from version 1.1.1)
  */
 function gsec_enqueue_styles_hu() {
     $style_handle = 'gsec-styles-hu-handle';
