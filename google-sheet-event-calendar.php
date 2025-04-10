@@ -480,17 +480,17 @@ function gsec_enqueue_styles() {
 
     $custom_css = "
         .gsec-event-list {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             padding: 0;
             list-style: none;
-            max-width: 600px; /* Optional: constrain width */
+            max-width: 600px;
         }
         .gsec-event {
             display: flex;
-            align-items: flex-start; /* Align items to the top */
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee; /* Separator line */
+            align-items: flex-start;
+            margin-bottom: 15px; /* Reduced from 25px */
+            padding-bottom: 10px; /* Reduced from 15px */
+            border-bottom: 1px solid #eee;
         }
         .gsec-event:last-child {
             border-bottom: none;
@@ -498,80 +498,78 @@ function gsec_enqueue_styles() {
             padding-bottom: 0;
         }
         .gsec-date-col {
-            flex: 0 0 60px; /* Slightly wider perhaps for date range */
+            flex: 0 0 50px; /* Slightly narrower */
             text-align: center;
-            margin-right: 15px; /* Space between date and details */
+            margin-right: 12px; /* Reduced from 15px */
             color: #555;
-            padding-top: 2px; /* Align top of date with top of text */
+            padding-top: 1px; /* Reduced from 2px */
         }
         /* Single Day Date Style */
         .gsec-event:not(.gsec-event-multi-day) .gsec-month {
             display: block;
-            font-size: 0.9em;
-            line-height: 1.2;
+            font-size: 0.85em; /* Reduced from 0.9em */
+            line-height: 1.1; /* Tighter line height */
             text-transform: lowercase;
             font-weight: normal;
         }
         .gsec-event:not(.gsec-event-multi-day) .gsec-day {
             display: block;
-            font-size: 1.4em; /* Larger day number */
+            font-size: 1.3em; /* Reduced from 1.4em */
             font-weight: bold;
-            line-height: 1.1;
+            line-height: 1;
         }
 
         /* Multi Day Date Styles */
         .gsec-event-multi-day .gsec-date-range {
-             font-size: 0.85em; /* Make text slightly smaller for range */
-             line-height: 1.3;
+             font-size: 0.8em; /* Reduced from 0.85em */
+             line-height: 1.2; /* Tighter line height */
         }
          .gsec-event-multi-day .gsec-date-part {
-             display: block; /* Stack start and end dates */
+             display: inline-block; /* Changed from block to inline-block for horizontal layout */
+             margin-right: 2px;
          }
          .gsec-event-multi-day .gsec-date-separator {
-             display: block; /* Separator on its own line */
+             display: inline-block; /* Changed to inline-block */
              font-size: 0.8em;
-             margin: 1px 0;
-             /* content: '-'; Optional: Use CSS content for separator */
+             margin: 0 1px; /* Reduced spacing */
          }
          .gsec-event-multi-day .gsec-date-part .gsec-month,
          .gsec-event-multi-day .gsec-date-part .gsec-day {
-             display: inline; /* Display month and day inline within the part */
-             margin: 0 1px; /* Tiny space between month/day */
-             font-weight: normal; /* Normal weight for range */
+             display: inline;
+             margin: 0;
+             font-weight: normal;
          }
          .gsec-event-multi-day .gsec-date-part .gsec-day {
-            font-weight: bold; /* Keep day bold */
+            font-weight: bold;
          }
          .gsec-event-multi-day .gsec-date-part .gsec-month {
             text-transform: lowercase;
          }
 
-
         .gsec-details-col {
-            flex: 1; /* Allow details column to take remaining space */
+            flex: 1;
         }
         .gsec-time-range {
-            font-size: 0.9em;
+            font-size: 0.85em; /* Reduced from 0.9em */
             color: #555;
-            margin-bottom: 4px;
+            margin-bottom: 2px; /* Reduced from 4px */
             font-weight: bold;
         }
         .gsec-event-title {
-            margin: 0; /* Remove default margins */
+            margin: 0;
             padding: 0;
-            font-size: 1.3em; /* Adjust title size */
+            font-size: 1.1em; /* Reduced from 1.3em */
             font-weight: bold;
-            line-height: 1.3;
+            line-height: 1.2; /* Tighter line height */
             color: #333;
-            margin-bottom: 4px; /* Add space below title for location */
+            margin-bottom: 2px; /* Reduced from 4px */
         }
         /* Location Style */
         .gsec-event-location {
-            font-size: 0.85em; /* Smaller font */
-            color: #777;      /* Grey color */
-            line-height: 1.4;
+            font-size: 0.8em; /* Reduced from 0.85em */
+            color: #777;
+            line-height: 1.3; /* Tighter line height */
         }
-
     ";
     wp_add_inline_style( $style_handle, $custom_css );
 }
