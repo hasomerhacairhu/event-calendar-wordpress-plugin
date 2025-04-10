@@ -1,15 +1,14 @@
 <?php
 /**
  * Plugin Name:       Google Sheet Event Calendar
- * Plugin URI:        https://example.com/ (Optional: Link to plugin info)
+ * Plugin URI:        https://github.com/hasomerhacairhu/event-calendar-wordpress-plugin
  * Description:       Displays upcoming events from a Google Sheet CSV using a shortcode. Mimics The Events Calendar list style.
  * Version:           1.0.1
- * Author:            Your Name or Company
- * Author URI:        https://example.com/ (Optional: Link to your website)
+ * Author:            Bedő Marci
+ * Author URI:        https://somer.hu/
  * License:           GPLv2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       google-sheet-event-calendar
- * Domain Path:       /languages
  */
 
 // If this file is called directly, abort.
@@ -197,10 +196,10 @@ function gsec_filter_and_sort_events( $events ) {
         if (!empty($start_datetime_str)) {
             // Try common formats, add more if needed based on your sheet data
             $formats = [
-                'Y.m.d H:i', 'Y-m-d H:i', 'm/d/Y H:i',
-                'Y.m.d G:i', 'Y-m-d G:i', 'm/d/Y G:i', // Handle single digit hour
+                'Y.m.d. H:i', 'Y.m.d H:i', 'Y-m-d H:i', 'm/d/Y H:i',
+                'Y.m.d. G:i', 'Y.m.d G:i', 'Y-m-d G:i', 'm/d/Y G:i', // Handle single digit hour
                 'Y.m.d H:i:s', 'Y-m-d H:i:s', 'm/d/Y H:i:s',
-                'Y.m.d', 'Y-m-d', 'm/d/Y' // Date only fallback
+                'Y.m.d.', 'Y.m.d', 'Y-m-d', 'm/d/Y' // Date only fallback
             ];
             foreach ($formats as $format) {
                 $dt = DateTime::createFromFormat($format, $start_datetime_str);
