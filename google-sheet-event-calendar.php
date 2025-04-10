@@ -1,14 +1,15 @@
 <?php
 /**
- * Plugin Name:       Google Sheet Event Calendar
- * Plugin URI:        https://github.com/hasomerhacairhu/event-calendar-wordpress-plugin
- * Description:       Displays upcoming events from a Google Sheet CSV using a shortcode. Mimics The Events Calendar list style.
- * Version:           1.0.1
- * Author:            Bedő Marci
- * Author URI:        https://somer.hu/
+ * Plugin Name:       Google Sheet Event Calendar (HU Layout)
+ * Plugin URI:        https://example.com/ (Optional: Link to plugin info)
+ * Description:       Displays upcoming events from a Google Sheet CSV using a shortcode, styled for a specific Hungarian layout.
+ * Version:           1.1.0
+ * Author:            Your Name or Company
+ * Author URI:        https://example.com/ (Optional: Link to your website)
  * License:           GPLv2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       google-sheet-event-calendar
+ * Text Domain:       google-sheet-event-calendar-hu
+ * Domain Path:       /languages
  */
 
 // If this file is called directly, abort.
@@ -22,25 +23,37 @@ define('GSEC_COL_START_TIME', 1);      // B Kezdő időpont
 define('GSEC_COL_END_DATE', 2);        // C Dátum vége
 define('GSEC_COL_END_TIME', 3);        // D Záró időpont
 define('GSEC_COL_TITLE_HU', 4);        // E Program neve (Title)
-define('GSEC_COL_TITLE_EN', 5);        // F English title of activity
-define('GSEC_COL_LOCATION', 6);        // G Tervezett helyszín (Location)
-define('GSEC_COL_MANAGER', 7);         // H Felelős (Manager)
+define('GSEC_COL_TITLE_EN', 5);        // F English title of activity (Kept for data structure, but not used in output)
+define('GSEC_COL_LOCATION', 6);        // G Tervezett helyszín (Location) (Kept for data structure, but not used in output)
+define('GSEC_COL_MANAGER', 7);         // H Felelős (Manager) (Kept for data structure, but not used in output)
+
+/**
+ * Load plugin textdomain for internationalization.
+ */
+function gsec_load_textdomain() {
+    load_plugin_textdomain( 'google-sheet-event-calendar-hu', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
+add_action( 'plugins_loaded', 'gsec_load_textdomain' );
+
 
 /**
  * Registers the shortcode [google_sheet_event_calendar].
  */
 function gsec_register_shortcode() {
-    add_shortcode( 'google_sheet_event_calendar', 'gsec_render_shortcode' );
+    // Use a slightly different shortcode name to avoid conflict if the old one exists
+    add_shortcode( 'google_sheet_event_calendar_hu', 'gsec_render_shortcode_hu' );
+    // Optional: Add alias for the old shortcode name if needed for backward compatibility
+    // add_shortcode( 'google_sheet_event_calendar', 'gsec_render_shortcode_hu' );
 }
 add_action( 'init', 'gsec_register_shortcode' );
 
 /**
- * Renders the event calendar shortcode output.
+ * Renders the event calendar shortcode output (Hungarian Layout).
  *
  * @param array $atts Shortcode attributes.
  * @return string HTML output for the event list.
  */
-function gsec_render_shortcode( $atts ) {
+function gsec_render_shortcode_hu( $atts ) {
     // Define default attributes and merge with user attributes
     $atts = shortcode_atts(
         array(
@@ -48,7 +61,7 @@ function gsec_render_shortcode( $atts ) {
             'csv_url' => '',           // Default empty CSV URL
         ),
         $atts,
-        'google_sheet_event_calendar'
+        'google_sheet_event_calendar_hu' // Use the new shortcode name here too
     );
 
     // Sanitize attributes
@@ -57,21 +70,25 @@ function gsec_render_shortcode( $atts ) {
 
     // Validate CSV URL
     if ( empty( $csv_url ) || ! filter_var( $csv_url, FILTER_VALIDATE_URL ) ) {
-        return '<p style="color: red;">' . esc_html__( 'Error: Please provide a valid public Google Sheet CSV URL in the shortcode.', 'google-sheet-event-calendar' ) . '</p>';
+        // Using __() for potential translation if language files are provided
+        return '<p style="color: red;">' . esc_html__( 'Hiba: Kérjük, adjon meg egy érvényes Google Táblázat CSV URL-t a shortcode-ban.', 'google-sheet-event-calendar-hu' ) . '</p>';
     }
 
     // --- Caching Logic ---
-    $cache_key      = 'gsec_event_data_' . md5( $csv_url );
+    $cache_key      = 'gsec_event_data_hu_' . md5( $csv_url ); // Slightly different cache key
     $cached_events  = get_transient( $cache_key );
     $fetched_events = false; // Initialize as false
 
     if ( false === $cached_events ) {
         // Cache is expired or doesn't exist, fetch fresh data
-        $fetched_events = gsec_fetch_and_parse_csv( $csv_url );
+        $fetched_events = gsec_fetch_and_parse_csv_hu( $csv_url ); // Use updated parsing function if needed (name kept same for now)
 
         if ( is_wp_error( $fetched_events ) ) {
             // If fetching failed, return the error message
-            return '<p style="color: red;">' . esc_html__( 'Error fetching or parsing CSV:', 'google-sheet-event-calendar' ) . ' ' . esc_html( $fetched_events->get_error_message() ) . '</p>';
+             return '<p style="color: red;">' . sprintf(
+                esc_html__( 'Hiba a CSV lekérésekor vagy feldolgozásakor (%s):', 'google-sheet-event-calendar-hu' ),
+                esc_html( $fetched_events->get_error_code() )
+            ) . ' ' . esc_html( $fetched_events->get_error_message() ) . '</p>';
         }
 
         // Store the fetched data in the cache for 6 hours
@@ -84,48 +101,49 @@ function gsec_render_shortcode( $atts ) {
 
     // --- Data Processing ---
     if ( empty( $fetched_events ) ) {
-         return '<p>' . esc_html__( 'No event data found in the spreadsheet or cache.', 'google-sheet-event-calendar' ) . '</p>';
+         return '<p>' . esc_html__( 'Nem található eseményadat a táblázatban vagy a gyorsítótárban.', 'google-sheet-event-calendar-hu' ) . '</p>';
     }
 
     // Filter for upcoming events and sort them
-    $upcoming_events = gsec_filter_and_sort_events( $fetched_events );
+    $upcoming_events = gsec_filter_and_sort_events_hu( $fetched_events ); // Use updated filtering/sorting function
 
     // Limit the number of events
     $display_events = array_slice( $upcoming_events, 0, $event_count );
 
     // --- Rendering ---
     if ( empty( $display_events ) ) {
-        return '<p>' . esc_html__( 'No upcoming events found.', 'google-sheet-event-calendar' ) . '</p>';
+        return '<p>' . esc_html__( 'Nincsenek közelgő események.', 'google-sheet-event-calendar-hu' ) . '</p>';
     }
 
     // Enqueue styles for the calendar
-    gsec_enqueue_styles();
+    gsec_enqueue_styles_hu(); // Use updated styles function
 
-    return gsec_generate_html( $display_events );
+    return gsec_generate_html_hu( $display_events ); // Use updated HTML generation function
 }
 
 /**
  * Fetches and parses the CSV data from the given URL.
+ * (No changes needed here from version 1.0.1, assuming column structure is the same)
  *
  * @param string $csv_url The URL of the Google Sheet CSV.
  * @return array|WP_Error Array of event data on success, WP_Error on failure.
  */
-function gsec_fetch_and_parse_csv( $csv_url ) {
-    $response = wp_remote_get( $csv_url, array( 'timeout' => 15 ) ); // Increased timeout slightly
+function gsec_fetch_and_parse_csv_hu( $csv_url ) {
+    $response = wp_remote_get( $csv_url, array( 'timeout' => 15 ) );
 
     if ( is_wp_error( $response ) ) {
-        return new WP_Error( 'fetch_error', __( 'Could not retrieve data from the URL.', 'google-sheet-event-calendar' ), $response->get_error_message() );
+        return new WP_Error( 'fetch_error', __( 'Nem sikerült lekérni az adatokat az URL-ről.', 'google-sheet-event-calendar-hu' ), $response->get_error_message() );
     }
 
     $http_code = wp_remote_retrieve_response_code( $response );
     if ( $http_code !== 200 ) {
-        return new WP_Error( 'fetch_error_code', sprintf( __( 'Received HTTP status code %d when fetching the URL.', 'google-sheet-event-calendar' ), $http_code ) );
+        return new WP_Error( 'fetch_error_code', sprintf( __( 'A %d HTTP státuszkód érkezett az URL lekérésekor.', 'google-sheet-event-calendar-hu' ), $http_code ) );
     }
 
     $csv_data = wp_remote_retrieve_body( $response );
 
     if ( empty( $csv_data ) ) {
-         return new WP_Error( 'empty_csv', __( 'The fetched CSV file is empty.', 'google-sheet-event-calendar' ) );
+         return new WP_Error( 'empty_csv', __( 'A letöltött CSV fájl üres.', 'google-sheet-event-calendar-hu' ) );
     }
 
     // Parse CSV data
@@ -133,28 +151,21 @@ function gsec_fetch_and_parse_csv( $csv_url ) {
     $header = null;
     $events = array();
 
-    // Check if there's at least a header and one data row
     if (count($lines) < 2) {
-        return new WP_Error( 'no_data_rows', __( 'CSV does not contain any data rows (only header or empty).', 'google-sheet-event-calendar' ) );
+        return new WP_Error( 'no_data_rows', __( 'A CSV nem tartalmaz adatsorokat (csak fejlécet vagy üres).', 'google-sheet-event-calendar-hu' ) );
     }
 
     foreach ( $lines as $index => $line ) {
-        // Skip empty lines just in case
         if ( empty( trim($line) ) ) continue;
-
         $row = str_getcsv( trim( $line ) );
 
         if ( $index === 0 ) {
-            // You might want to validate header columns here if needed
             $header = $row;
-            continue; // Skip header row
+            continue;
         }
 
-        // Basic check for expected number of columns (adjust if structure is flexible)
         if ( count( $row ) < max( GSEC_COL_START_DATE, GSEC_COL_START_TIME, GSEC_COL_END_DATE, GSEC_COL_END_TIME, GSEC_COL_TITLE_HU, GSEC_COL_TITLE_EN, GSEC_COL_LOCATION, GSEC_COL_MANAGER ) + 1 ) {
-            // Log this potentially problematic row, but try to continue if possible
-             error_log("GSEC Plugin: Row $index has fewer columns than expected. Skipping row or processing partial data.");
-             // Decide whether to skip or try to process partial data. Skipping is safer.
+             error_log("GSEC Plugin HU: Row $index has fewer columns than expected. Skipping row.");
              continue;
         }
 
@@ -171,202 +182,269 @@ function gsec_fetch_and_parse_csv( $csv_url ) {
     }
 
     if ( empty( $events ) ) {
-         return new WP_Error( 'no_valid_rows', __( 'No valid data rows found after parsing the CSV.', 'google-sheet-event-calendar' ) );
+         return new WP_Error( 'no_valid_rows', __( 'Nem található érvényes adatsor a CSV feldolgozása után.', 'google-sheet-event-calendar-hu' ) );
     }
 
     return $events;
 }
 
+
 /**
  * Filters events to include only upcoming ones and sorts them chronologically.
+ * Handles specific Hungarian date format 'Y.m.d.'.
  *
  * @param array $events Array of parsed event data.
  * @return array Sorted array of upcoming events.
  */
-function gsec_filter_and_sort_events( $events ) {
+function gsec_filter_and_sort_events_hu( $events ) {
     $upcoming = [];
-    $now = current_time( 'timestamp' ); // Use WordPress function for current time
+    // Ensure WordPress timezone is used for 'now' comparison
+    $now = new DateTime('now', new DateTimeZone(wp_timezone_string()));
+    $now_timestamp = $now->getTimestamp();
 
     foreach ( $events as $event ) {
-        // Attempt to create a DateTime object from the start date and time
-        // Be robust: try common Hungarian/ISO formats, handle missing time gracefully
         $start_timestamp = false;
-        $start_datetime_str = trim($event['start_date'] . ' ' . $event['start_time']);
+        $start_date_str_raw = $event['start_date'];
+        $start_time_str = $event['start_time'];
 
-        if (!empty($start_datetime_str)) {
-            // Try common formats, add more if needed based on your sheet data
-            $formats = [
-                'Y.m.d. H:i', 'Y.m.d H:i', 'Y-m-d H:i', 'm/d/Y H:i',
-                'Y.m.d. G:i', 'Y.m.d G:i', 'Y-m-d G:i', 'm/d/Y G:i', // Handle single digit hour
-                'Y.m.d H:i:s', 'Y-m-d H:i:s', 'm/d/Y H:i:s',
-                'Y.m.d.', 'Y.m.d', 'Y-m-d', 'm/d/Y' // Date only fallback
-            ];
-            foreach ($formats as $format) {
-                $dt = DateTime::createFromFormat($format, $start_datetime_str);
-                // Check if the format matched AND the original string represents the parsed date correctly
-                if ($dt !== false && $dt->format($format) === $start_datetime_str) {
-                     $start_timestamp = $dt->getTimestamp();
-                     break; // Found a valid format
-                } elseif($dt !== false && strpos($format, 'H:i') === false && $dt->format($format) === $event['start_date']) {
-                    // Handle date-only formats - assume start of day
-                    $start_timestamp = $dt->setTime(0, 0, 0)->getTimestamp();
-                    break; // Found a valid date-only format
+        // --- Date Parsing ---
+        // Trim potential trailing dot and whitespace
+        $start_date_str = trim( trim( $start_date_str_raw ), '.' );
+
+        if ( ! empty( $start_date_str ) ) {
+            $dt_start = false;
+            // Prioritize the specific format Y.m.d
+            $dt_start = DateTime::createFromFormat('Y.m.d', $start_date_str, new DateTimeZone(wp_timezone_string()));
+
+            if ($dt_start === false) {
+                 // Fallback to other common formats if needed
+                 $formats = ['Y-m-d', 'm/d/Y']; // Add others if necessary
+                 foreach ($formats as $format) {
+                     $dt_start = DateTime::createFromFormat($format, $start_date_str, new DateTimeZone(wp_timezone_string()));
+                     if ($dt_start !== false) break;
+                 }
+            }
+            // Last resort: strtotime - less reliable for specific formats but good fallback
+             if ($dt_start === false) {
+                $parsed_time = strtotime($start_date_str);
+                if($parsed_time !== false){
+                     $dt_start = new DateTime('@' . $parsed_time);
+                     $dt_start->setTimezone(new DateTimeZone(wp_timezone_string())); // Ensure correct timezone
                 }
+             }
+
+            // --- Time Parsing ---
+            if ($dt_start !== false) {
+                 // Set time if provided and valid (H:i format)
+                 if (!empty($start_time_str) && preg_match('/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/', $start_time_str)) {
+                    list($hour, $minute) = explode(':', $start_time_str);
+                    $dt_start->setTime(intval($hour), intval($minute), 0);
+                 } else {
+                     // If no valid time, assume start of the day
+                     $dt_start->setTime(0, 0, 0);
+                 }
+                 $start_timestamp = $dt_start->getTimestamp();
+
+            } else {
+                 error_log("GSEC Plugin HU: Could not parse start date: " . $start_date_str_raw);
+                 continue; // Skip event if date is unparseable
             }
-            // Last resort: strtotime (less reliable for non-standard formats)
-            if ($start_timestamp === false) {
-                 $start_timestamp = strtotime($start_datetime_str);
-            }
+
+        } else {
+             error_log("GSEC Plugin HU: Empty start date found for event title: " . $event['title_hu']);
+             continue; // Skip event if date is missing
         }
 
-        if ( $start_timestamp === false ) {
-            // Could not parse date/time, skip this event or log an error
-            error_log("GSEC Plugin: Could not parse start date/time: " . $event['start_date'] . ' ' . $event['start_time']);
-            continue;
-        }
-
-        // Add event if its start time is in the future (or very close to now)
-        if ( $start_timestamp >= $now ) {
-            $event['start_timestamp'] = $start_timestamp; // Add timestamp for sorting
+        // Add event if its start time is in the future (or today)
+        // Compare timestamp derived from date potentially set to 00:00 if time missing
+        if ( $start_timestamp !== false && $start_timestamp >= $now_timestamp ) {
+            $event['start_timestamp'] = $start_timestamp;
+            // Simple parsing for end time for display - assuming same format
+            $event['end_time_display'] = !empty($event['end_time']) ? trim($event['end_time']) : '';
             $upcoming[] = $event;
         }
     }
 
     // Sort events by start timestamp (ascending)
     usort( $upcoming, function( $a, $b ) {
-        return $a['start_timestamp'] <=> $b['start_timestamp']; // spaceship operator (PHP 7+)
-        // Fallback for older PHP: return ($a['start_timestamp'] < $b['start_timestamp']) ? -1 : 1;
+        return $a['start_timestamp'] <=> $b['start_timestamp'];
     } );
 
     return $upcoming;
 }
 
+
 /**
- * Generates the HTML output for the event list.
+ * Generates the HTML output for the event list (Hungarian Layout).
  *
  * @param array $events Array of sorted, filtered events to display.
  * @return string HTML output.
  */
-function gsec_generate_html( $events ) {
+function gsec_generate_html_hu( $events ) {
     ob_start(); // Start output buffering
 
-    echo '<div class="gsec-event-list">';
+    // Set locale to Hungarian for date_i18n - Requires Hungarian language pack installed in WP
+    // Note: This might conflict if other parts of the site need a different locale temporarily.
+    // Consider checking if WP locale is already Hungarian.
+    $original_locale = setlocale(LC_TIME, 0); // Get current locale
+    $locale_set = setlocale(LC_TIME, 'hu_HU.UTF-8', 'hu_HU', 'hu', 'hungarian'); // Try setting Hungarian locale
+
+    if ($locale_set === false) {
+        error_log("GSEC Plugin HU: Failed to set Hungarian locale. Date formatting might not be correct.");
+        // Provide fallback month names if locale setting fails and WordPress doesn't handle 'M' correctly
+        $hu_month_abbr = ['jan', 'feb', 'márc', 'ápr', 'máj', 'jún', 'júl', 'aug', 'szept', 'okt', 'nov', 'dec'];
+    } else {
+        $hu_month_abbr = null; // Indicate that date_i18n should work
+    }
+
+    echo '<div class="gsec-event-list-hu">'; // Use a new class for the list
 
     foreach ( $events as $event ) {
-        // Determine which title to use (prefer English if available, fallback to Hungarian)
-        $title = !empty($event['title_en']) ? $event['title_en'] : $event['title_hu'];
+        // Use the Hungarian title directly
+        $title = $event['title_hu'];
 
-        // Format the date and time using WordPress's localization functions
-        // Adjust format string as needed (see https://wordpress.org/support/article/formatting-date-and-time/)
-        $date_format = get_option( 'date_format', 'Y.m.d' ); // Use WP setting or default
-        $time_format = get_option( 'time_format', 'H:i' ); // Use WP setting or default
-
-        $start_display = date_i18n( $date_format, $event['start_timestamp'] );
-        if ( ! empty( $event['start_time'] ) ) {
-             // Only add time if it was present and parsed
-             if(strpos($event['start_time'], ':') !== false){ // Basic check if it looks like a time
-                $start_display .= ' ' . date_i18n( $time_format, $event['start_timestamp'] );
-             } else {
-                // Maybe log that time format was unexpected? Or just omit.
-             }
+        // Format the date parts using date_i18n
+        $month_abbr = '';
+        if ($hu_month_abbr) {
+            // Fallback if locale setting failed
+             $month_num = date('n', $event['start_timestamp']);
+             $month_abbr = $hu_month_abbr[$month_num - 1];
+        } else {
+            // Try standard WordPress localization first - 'M' usually gives 3-letter abbr.
+            // Need to verify if WP Hungarian pack provides 'ápr', 'máj' etc. for 'M'.
+             $month_abbr = date_i18n( 'M', $event['start_timestamp'] );
+             // Remove potential trailing dot added by some locales/formats
+             $month_abbr = rtrim($month_abbr, '.');
         }
 
-        // Optional: Handle end date/time display if needed
-        $end_display = '';
-        if (!empty($event['end_date'])) {
-             // Similar parsing logic as start date could be added here if precise end time display is needed
-             // For simplicity now, just display raw end date if present
-             $end_display = ' - ' . esc_html($event['end_date']);
-             if (!empty($event['end_time'])) {
-                 $end_display .= ' ' . esc_html($event['end_time']);
-             }
+        $day = date_i18n( 'j', $event['start_timestamp'] ); // Day without leading zero
+
+        // Format the time range
+        $time_range = trim($event['start_time']);
+        if ( ! empty( $event['end_time_display'] ) ) {
+            // Basic check to avoid adding '-' if end_time is same as start_time (or invalid)
+            if(trim($event['end_time_display']) != $time_range){
+                 $time_range .= ' - ' . esc_html( $event['end_time_display'] );
+            }
         }
 
         ?>
-        <div class="gsec-event">
-            <div class="gsec-event-datetime">
-                <span class="gsec-event-start-datetime"><?php echo esc_html( $start_display ); ?></span>
-                <?php /* Optional: Display end date/time if needed
-                if (!empty($end_display)) {
-                    echo '<span class="gsec-event-end-datetime">' . esc_html( $end_display ) . '</span>';
-                }
-                */ ?>
+        <div class="gsec-event-hu">
+            <div class="gsec-date-col">
+                <span class="gsec-month"><?php echo esc_html( $month_abbr ); ?></span>
+                <span class="gsec-day"><?php echo esc_html( $day ); ?></span>
             </div>
-            <h3 class="gsec-event-title"><?php echo esc_html( $title ); ?></h3>
-            <?php if ( ! empty( $event['location'] ) ) : ?>
-                <div class="gsec-event-location">
-                    <span class="gsec-label"><?php esc_html_e( 'Location:', 'google-sheet-event-calendar' ); ?></span>
-                    <span class="gsec-value"><?php echo esc_html( $event['location'] ); ?></span>
-                </div>
-            <?php endif; ?>
-            <?php /* Optional: Display Manager
-            <?php if ( ! empty( $event['manager'] ) ) : ?>
-                <div class="gsec-event-manager">
-                     <span class="gsec-label"><?php esc_html_e( 'Manager:', 'google-sheet-event-calendar' ); ?></span>
-                     <span class="gsec-value"><?php echo esc_html( $event['manager'] ); ?></span>
-                </div>
-            <?php endif; ?>
-            */ ?>
+            <div class="gsec-details-col">
+                <?php if ( ! empty( $time_range ) ) : ?>
+                <div class="gsec-time-range"><?php echo esc_html( $time_range ); ?></div>
+                <?php endif; ?>
+                <h3 class="gsec-event-title"><?php echo esc_html( $title ); ?></h3>
+                 <?php
+                 /* Optional: Add other details if needed in this column
+                 if ( ! empty( $event['location'] ) ) : ?>
+                    <div class="gsec-event-location">
+                        <span class="gsec-value"><?php echo esc_html( $event['location'] ); ?></span>
+                    </div>
+                <?php endif; */
+                 ?>
+            </div>
         </div>
         <?php
     } // end foreach event
 
-    echo '</div>'; // end .gsec-event-list
+    echo '</div>'; // end .gsec-event-list-hu
+
+    // Restore original locale if it was changed
+    setlocale(LC_TIME, $original_locale);
 
     return ob_get_clean(); // Return the buffered output
 }
 
-/**
- * Enqueues basic inline styles to mimic The Events Calendar list.
- */
-function gsec_enqueue_styles() {
-    // Register a dummy handle for our inline styles
-    wp_register_style( 'gsec-styles-handle', false );
-    wp_enqueue_style( 'gsec-styles-handle' );
 
-    // Basic CSS - Adjust these styles to better match The Events Calendar
+/**
+ * Enqueues inline styles for the Hungarian layout.
+ */
+function gsec_enqueue_styles_hu() {
+    // Use a different handle for the Hungarian styles
+    $style_handle = 'gsec-styles-hu-handle';
+    wp_register_style( $style_handle, false );
+    wp_enqueue_style( $style_handle );
+
+    // CSS adjusted for the two-column layout based on the screenshot
     $custom_css = "
-        .gsec-event-list {
+        .gsec-event-list-hu {
             margin-bottom: 20px;
-            list-style: none; /* Remove default list styling if it were a ul */
             padding: 0;
+            list-style: none;
+            max-width: 600px; /* Optional: constrain width */
         }
-        .gsec-event {
+        .gsec-event-hu {
+            display: flex; /* Enable Flexbox */
+            align-items: flex-start; /* Align items to the top */
             margin-bottom: 25px;
             padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #eee; /* Separator line */
         }
-        .gsec-event:last-child {
+        .gsec-event-hu:last-child {
             border-bottom: none;
             margin-bottom: 0;
             padding-bottom: 0;
         }
-        .gsec-event-datetime {
+        .gsec-date-col {
+            flex: 0 0 50px; /* Fixed width for date column (adjust as needed) */
+            text-align: center;
+            margin-right: 15px; /* Space between date and details */
+            color: #555;
+        }
+        .gsec-month {
+            display: block;
+            font-size: 0.9em;
+            line-height: 1.2;
+            text-transform: lowercase; /* Match screenshot */
+            font-weight: normal;
+        }
+        .gsec-day {
+            display: block;
+            font-size: 1.4em; /* Larger day number */
+            font-weight: bold;
+            line-height: 1.1;
+        }
+        .gsec-details-col {
+            flex: 1; /* Allow details column to take remaining space */
+        }
+        .gsec-time-range {
             font-size: 0.9em;
             color: #555;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             font-weight: bold;
         }
         .gsec-event-title {
-            margin-top: 0;
-            margin-bottom: 8px;
-            font-size: 1.2em;
-            /* Add more styling like font-family if needed */
-        }
-        .gsec-event-location,
-        .gsec-event-manager { /* Style for optional manager field */
-            font-size: 0.9em;
-            color: #333;
-            margin-bottom: 4px;
-        }
-        .gsec-label {
+            margin: 0; /* Remove default margins */
+            padding: 0;
+            font-size: 1.3em; /* Adjust title size */
             font-weight: bold;
-            margin-right: 5px;
+            line-height: 1.3;
+            color: #333;
         }
+        /* Optional: Add hover effect if titles should be links (requires adding <a> tag in HTML) */
+        /*
+        .gsec-event-title a {
+             color: #333;
+             text-decoration: none;
+        }
+        .gsec-event-title a:hover {
+             color: #000;
+             text-decoration: underline;
+        }
+        */
     ";
-    wp_add_inline_style( 'gsec-styles-handle', $custom_css );
+    wp_add_inline_style( $style_handle, $custom_css );
 }
 // Hook the style enqueue function to wp_enqueue_scripts
-add_action( 'wp_enqueue_scripts', 'gsec_enqueue_styles' );
+// No need to add this action again if it was already present from the previous version,
+// but ensure it's called for the *new* style function:
+remove_action( 'wp_enqueue_scripts', 'gsec_enqueue_styles' ); // Remove old action if it existed
+add_action( 'wp_enqueue_scripts', 'gsec_enqueue_styles_hu' ); // Add new action
+
 
 ?>
